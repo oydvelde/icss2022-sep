@@ -59,11 +59,17 @@ property: LOWER_IDENT;
 variableAssignment: variableReference ASSIGNMENT_OPERATOR expression SEMICOLON;
 variableReference: LOWER_IDENT | CAPITAL_IDENT | MIXED_IDENT;
 
-expression: literal | expression (MUL) expression | expression (PLUS | MIN) expression ;
+expression
+    : literal                       #LiteralExpression
+    | expression MUL expression     #MultiplyExpression
+    | expression MIN expression     #SubstractExpression
+    | expression PLUS expression    #AddOperation
+    ;
+
 literal: COLOR | PIXELSIZE | PERCENTAGE | SCALAR | booleanLiteral | variableReference;
 booleanLiteral: TRUE | FALSE ;
 
-ifClause: IF BOX_BRACKET_OPEN expression BOX_BRACKET_CLOSE OPEN_BRACE (declaratie | variableAssignment | ifClause)+ CLOSE_BRACE elseClause?;
+ifClause: IF BOX_BRACKET_OPEN (booleanLiteral | variableReference) BOX_BRACKET_CLOSE OPEN_BRACE (declaratie | variableAssignment | ifClause)+ CLOSE_BRACE elseClause?;
 elseClause: ELSE OPEN_BRACE (declaratie | variableAssignment)+ CLOSE_BRACE;
 
 
