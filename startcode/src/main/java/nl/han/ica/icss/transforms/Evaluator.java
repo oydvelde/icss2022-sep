@@ -13,7 +13,6 @@ import nl.han.ica.icss.ast.operations.SubtractOperation;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedList;
 
 public class Evaluator implements Transform {
 
@@ -30,20 +29,46 @@ public class Evaluator implements Transform {
     }
 
     private void evaluateStylesheet(Stylesheet stylesheet) {
-        for (ASTNode node : stylesheet.body) {
-            evaluateNode(node);
-        }
+        ArrayList<ASTNode> nodes = stylesheet.body;
+
+        evaluateNodesWithParent(nodes);
+
+        removeVariableAssignments(nodes);
     }
 
-    private void evaluateNode(ASTNode node) {
-        if (node instanceof VariableAssignment) {
-            evaluateVariableAssignment((VariableAssignment) node);
-        } else if (node instanceof Stylerule) {
-            evaluateStylerule((Stylerule) node);
-        } else if (node instanceof Declaration) {
-            evaluateDeclaration((Declaration) node);
-//        } else if (node instanceof IfClause) {
-//            evaluateIfClause((IfClause) node);
+    private  void evaluateNodesWithParent(ArrayList<ASTNode> nodes) {
+        for (int i = 0; i < nodes.size(); i++) {
+            ASTNode node = nodes.get(i);
+
+            if (node instanceof IfClause) {
+                IfClause ifClause = (IfClause) node;
+                Literal condition = evaluateExpression(ifClause.conditionalExpression);
+
+                boolean cond = false;
+                if (condition instanceof BoolLiteral) {
+                    cond = ((BoolLiteral) condition).value;
+                }
+
+                ArrayList<ASTNode> chosenBody = new ArrayList<>();
+                if (cond) {
+                    chosenBody = ifClause.body;
+                } else if (ifClause.elseClause != null) {
+                    chosenBody = ifClause.elseClause.body;
+                }
+
+                ArrayList<ASTNode> copyOfChosen = new ArrayList<>(chosenBody);
+
+                nodes.remove(i);
+                nodes.addAll(i, copyOfChosen);
+
+                evaluateNodesWithParent(copyOfChosen);
+            } else if (node instanceof VariableAssignment) {
+                evaluateVariableAssignment((VariableAssignment) node);
+            } else if (node instanceof Stylerule) {
+                evaluateStylerule((Stylerule) node);
+            } else if (node instanceof Declaration) {
+                evaluateDeclaration((Declaration) node);
+            }
         }
     }
 
@@ -89,17 +114,34 @@ public class Evaluator implements Transform {
             Literal left = evaluateExpression(((MultiplyOperation) expr).lhs);
             Literal right = evaluateExpression(((MultiplyOperation) expr).rhs);
 
-            // altijd scalarliteral returnen aangezien 1 van de twee scalair is.. eerst kijken welke en die dan vermenigvuldigen met de andere
+            ScalarLiteral scalar = left instanceof ScalarLiteral ? (ScalarLiteral) left : (ScalarLiteral) right;
+            Literal multiplier = scalar == left ? right : left;
+
+            if (multiplier instanceof PixelLiteral) {
+                return new PixelLiteral(((PixelLiteral) multiplier).value * scalar.value);
+            } else if (multiplier instanceof PercentageLiteral) {
+                return new PercentageLiteral(((PercentageLiteral) multiplier).value * scalar.value);
+            } else if (multiplier instanceof ScalarLiteral) {
+                return new ScalarLiteral(((ScalarLiteral) multiplier).value * scalar.value);
+            }
         }
+
         return null;
     }
 
+    private void removeVariableAssignments(ArrayList<ASTNode> nodes) {
+        nodes.removeIf(node -> node instanceof VariableAssignment);
+
+        for (ASTNode node : nodes) {
+            if (node instanceof Stylerule) {
+                removeVariableAssignments(((Stylerule) node).body);
+            }
+        }
+    }
 
     private void evaluateStylerule(Stylerule rule) {
-        variableValues.addFirst(new HashMap<>(variableValues.getFirst())); // nieuwe scope met kopie
-        for (ASTNode node : rule.body) {
-            evaluateNode(node);
-        }
+        variableValues.addFirst(new HashMap<>(variableValues.getFirst()));
+        evaluateNodesWithParent(rule.body);
         variableValues.removeFirst();
     }
 
