@@ -103,7 +103,7 @@ public class ASTListener extends ICSSBaseListener {
 
     @Override
     public void enterLiteral(ICSSParser.LiteralContext ctx) {
-        if(ctx.getText().startsWith("#")){
+        if(ctx.getText().matches("#[0-9a-fA-F]{6}")){
             currentContainer.push(new ColorLiteral(ctx.getText()));
         }
         else if(ctx.getText().endsWith("px")) {

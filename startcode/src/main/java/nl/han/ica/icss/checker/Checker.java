@@ -4,6 +4,9 @@ import nl.han.ica.datastructures.HANLinkedList;
 import nl.han.ica.datastructures.IHANLinkedList;
 import nl.han.ica.icss.ast.*;
 import nl.han.ica.icss.ast.literals.BoolLiteral;
+import nl.han.ica.icss.ast.operations.AddOperation;
+import nl.han.ica.icss.ast.operations.MultiplyOperation;
+import nl.han.ica.icss.ast.operations.SubtractOperation;
 import nl.han.ica.icss.ast.types.ExpressionType;
 
 import java.util.HashMap;
@@ -22,8 +25,8 @@ public class Checker {
         walkThroughAst(ast.root);
     }
 
-    public void walkThroughAst(ASTNode astNode) {
-        if (isNewScopeNode(astNode)) enterScope(astNode);
+    private void walkThroughAst(ASTNode astNode) {
+        if (isNewScopeNode(astNode)) enterScope();
 
         if (astNode instanceof VariableAssignment) pushAssignment((VariableAssignment) astNode);
 
@@ -36,13 +39,40 @@ public class Checker {
             checkOperationTypeAndScalar(operation);
         }
 
+        if (astNode instanceof Declaration) checkDeclaration((Declaration)  astNode);
+
         for (ASTNode child : astNode.getChildren()) walkThroughAst(child);
 
         if (isNewScopeNode(astNode)) exitScope();
     }
 
+    // CH04 - Controleer of bij declaraties het type van de value klopt met de property. Declaraties zoals width: #ff0000 of color: 12px zijn natuurlijk onzin.
+    private void checkDeclaration(Declaration astNode) {
+        String propertyName = astNode.property.name;
+        ExpressionType expressionType = checkExpression.getExpressionType(astNode.expression, scopeMap);
+
+        switch (propertyName.toLowerCase()) {
+            case "color":
+            case "background-color":
+                if (expressionType != ExpressionType.COLOR) {
+                    astNode.setError("Declaration should be of type color for property " + propertyName);
+                }
+                break;
+
+            case "width":
+            case "height":
+                if (!expressionType.equals(ExpressionType.PIXEL) && !expressionType.equals(ExpressionType.PERCENTAGE)) {
+                    astNode.setError("Declaration should be of type pixel or percentage for property " + propertyName);
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
     private void pushAssignment(VariableAssignment astnode) {
-        scopeMap.getFirst().put(astnode.name.name, checkExpression.getExpressionType(astnode.expression, scopeMap));
+        ExpressionType expressionTypeVariable = checkExpression.getExpressionType(astnode.expression, scopeMap);
+        scopeMap.getFirst().put(astnode.name.name, expressionTypeVariable);
     }
 
     private void checkVariableReference(VariableReference node) {
@@ -63,18 +93,22 @@ public class Checker {
         return false;
     }
 
-    // TODO: CH02 - Controleer of de operanden van de operaties plus en min van gelijk type zijn. & Een operand scalair bij vermenigvuldigen
+    // CH02 - Controleer of de operanden van de operaties plus en min van gelijk type zijn. & Een operand scalair bij vermenigvuldigen
     private void checkOperationTypeAndScalar(Operation operation) {
-        // Ophalen van beiden helften
+        ExpressionType expressionTypeLhs = checkExpression.getExpressionType(operation.lhs, scopeMap);
+        ExpressionType expressionTypeRhs = checkExpression.getExpressionType(operation.rhs, scopeMap);
 
-        // TODO: Operaties bij plus en min moeten van gelijk type zijn
-            // Is operation plussen of minnen
-                // If conditie dat als ze niet gelijk zijn aan elkaar de node als error wordt gezet.
+        if (operation instanceof AddOperation ||  operation instanceof SubtractOperation) {
+            if (!expressionTypeLhs.equals(expressionTypeRhs)) {
+                operation.setError("Type mismatch in add or subtract operation");
+            }
+        }
 
-
-        // TODO: Bij operaties die vermenigvuldigen moet een van de twee scalair zijn.
-            // Is operation vermenigvuldingen
-                // If conditie waarin als beiden geen scalair zijn de node als error wordt gezet.
+        if (operation instanceof MultiplyOperation) {
+            if (!expressionTypeLhs.equals(ExpressionType.SCALAR) && !expressionTypeRhs.equals(ExpressionType.SCALAR)) {
+                operation.setError("Multiply operation without at least one scalar operand");
+            }
+        }
     }
 
     // CH03 - Controleer of er geen kleuren worden gebruikt in operaties (plus, min en keer).
@@ -87,7 +121,7 @@ public class Checker {
         }
     }
 
-    // CH06 - Controleer of de conditie bij een if-statement van het type boolean is.
+    // CH05 - Controleer of de conditie bij een if-statement van het type boolean is.
     private void checkIfClause(IfClause ifClause) {
         Expression conditionalExpression = ifClause.getConditionalExpression();
         ExpressionType expressionType = checkExpression.getExpressionType(conditionalExpression, scopeMap);
@@ -101,7 +135,7 @@ public class Checker {
     }
 
     //// Scoping
-    private void enterScope(ASTNode astNode) {
+    private void enterScope() {
         this.scopeMap.addFirst(new HashMap<>());
     }
 
