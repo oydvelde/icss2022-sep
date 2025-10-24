@@ -24,7 +24,7 @@ public class Generator {
 		}
 	}
 
-	private void zgenerateStylerule(Stylerule rule, StringBuilder stringBuilder, int indentLevel) {
+	private void generateStylerule(Stylerule rule, StringBuilder stringBuilder, int indentLevel) {
 		String indent = "  ".repeat(indentLevel);
 
 		String selectorString = rule.selectors.stream()
