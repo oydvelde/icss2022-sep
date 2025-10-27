@@ -22,7 +22,6 @@ COLOR: '#' [0-9a-f] [0-9a-f] [0-9a-f] [0-9a-f] [0-9a-f] [0-9a-f];
 
 //Specific identifiers for id's and css classes
 ID_IDENT: '#' [a-z0-9\-]+;
-// TODO: Hier kan een nummer komen als id, was een vraag bij veel assessments.
 CLASS_IDENT: '.' [a-z0-9\-]+;
 
 //General identifiers

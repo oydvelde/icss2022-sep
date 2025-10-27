@@ -22,10 +22,10 @@ public class Checker {
 
         checkExpression = new CheckExpression();
 
-        walkThroughAst(ast.root);
+        traverseAST(ast.root);
     }
 
-    private void walkThroughAst(ASTNode astNode) {
+    private void traverseAST(ASTNode astNode) {
         if (isNewScopeNode(astNode)) enterScope();
 
         if (astNode instanceof VariableAssignment) pushAssignment((VariableAssignment) astNode);
@@ -41,7 +41,7 @@ public class Checker {
 
         if (astNode instanceof Declaration) checkDeclaration((Declaration)  astNode);
 
-        for (ASTNode child : astNode.getChildren()) walkThroughAst(child);
+        for (ASTNode child : astNode.getChildren()) traverseAST(child);
 
         if (isNewScopeNode(astNode)) exitScope();
     }
