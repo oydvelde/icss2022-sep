@@ -51,7 +51,7 @@ ASSIGNMENT_OPERATOR: ':=';
 
 // level 0
 stylesheet: variableAssignment* stylerule+;
-stylerule: selector OPEN_BRACE (declaratie | ifClause)+ CLOSE_BRACE;
+stylerule: selector OPEN_BRACE (declaratie | ifClause | variableAssignment)+ CLOSE_BRACE;
 selector: ID_IDENT | CLASS_IDENT | LOWER_IDENT;
 declaratie: property COLON expression SEMICOLON;
 property: LOWER_IDENT;

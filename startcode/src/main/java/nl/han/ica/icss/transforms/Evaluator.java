@@ -16,7 +16,7 @@ import java.util.HashMap;
 
 public class Evaluator implements Transform {
 
-    private IHANLinkedList<HashMap<String, Literal>> variableValues;
+    private final IHANLinkedList<HashMap<String, Literal>> variableValues;
 
     public Evaluator() {
         variableValues = new HANLinkedList<>();
@@ -36,32 +36,23 @@ public class Evaluator implements Transform {
         removeVariableAssignments(nodes);
     }
 
-    private  void evaluateNodesWithParent(ArrayList<ASTNode> nodes) {
+    private void evaluateNodesWithParent(ArrayList<ASTNode> nodes) {
+        ArrayList<Integer> indicesToRemove = new ArrayList<>();
+        ArrayList<ArrayList<ASTNode>> nodesToInsertAt = new ArrayList<>();
+
         for (int i = 0; i < nodes.size(); i++) {
             ASTNode node = nodes.get(i);
 
             if (node instanceof IfClause) {
                 IfClause ifClause = (IfClause) node;
                 Literal condition = evaluateExpression(ifClause.conditionalExpression);
+                ArrayList<ASTNode> replacement = getAstNodes(condition, ifClause);
 
-                boolean cond = false;
-                if (condition instanceof BoolLiteral) {
-                    cond = ((BoolLiteral) condition).value;
-                }
+                indicesToRemove.add(i);
+                nodesToInsertAt.add(replacement);
 
-                ArrayList<ASTNode> chosenBody = new ArrayList<>();
-                if (cond) {
-                    chosenBody = ifClause.body;
-                } else if (ifClause.elseClause != null) {
-                    chosenBody = ifClause.elseClause.body;
-                }
+                evaluateNodesWithParent(replacement);
 
-                ArrayList<ASTNode> copyOfChosen = new ArrayList<>(chosenBody);
-
-                nodes.remove(i);
-                nodes.addAll(i, copyOfChosen);
-
-                evaluateNodesWithParent(copyOfChosen);
             } else if (node instanceof VariableAssignment) {
                 evaluateVariableAssignment((VariableAssignment) node);
             } else if (node instanceof Stylerule) {
@@ -70,6 +61,29 @@ public class Evaluator implements Transform {
                 evaluateDeclaration((Declaration) node);
             }
         }
+
+        for (int idx = indicesToRemove.size() - 1; idx >= 0; idx--) {
+            int removeIndex = indicesToRemove.get(idx);
+            nodes.remove(removeIndex);
+            nodes.addAll(removeIndex, nodesToInsertAt.get(idx));
+        }
+    }
+
+
+    private static ArrayList<ASTNode> getAstNodes(Literal condition, IfClause ifClause) {
+        boolean cond = false;
+        if (condition instanceof BoolLiteral) {
+            cond = ((BoolLiteral) condition).value;
+        }
+
+        ArrayList<ASTNode> chosenBody = new ArrayList<>();
+        if (cond) {
+            chosenBody = ifClause.body;
+        } else if (ifClause.elseClause != null) {
+            chosenBody = ifClause.elseClause.body;
+        }
+
+        return new ArrayList<>(chosenBody);
     }
 
     private void evaluateDeclaration(Declaration node) {
@@ -86,36 +100,27 @@ public class Evaluator implements Transform {
             return (Literal) expr;
         }
         if (expr instanceof VariableReference) {
-            return variableValues.getFirst().get(((VariableReference) expr).name);
+            return resolveVariable(((VariableReference) expr).name);
         }
-        if (expr instanceof AddOperation) {
-            Literal left = evaluateExpression(((AddOperation) expr).lhs);
-            Literal right = evaluateExpression(((AddOperation) expr).rhs);
+        Literal left = evaluateExpression(((Operation) expr).lhs);
+        Literal right = evaluateExpression(((Operation) expr).rhs);
+
+        if (expr instanceof AddOperation || expr instanceof SubtractOperation) {
+            double sign = (expr instanceof SubtractOperation) ? -1 : 1;
+
             if (left instanceof ScalarLiteral && right instanceof ScalarLiteral) {
-                return new ScalarLiteral(((ScalarLiteral) left).value + ((ScalarLiteral) right).value);
+                return new ScalarLiteral((int)(((ScalarLiteral) left).value + sign * ((ScalarLiteral) right).value));
             } else if (left instanceof PixelLiteral && right instanceof PixelLiteral) {
-                return new PixelLiteral(((PixelLiteral) left).value + ((PixelLiteral) right).value);
+                return new PixelLiteral((int)(((PixelLiteral) left).value + sign * ((PixelLiteral) right).value));
             } else if (left instanceof PercentageLiteral && right instanceof PercentageLiteral) {
-                return new PercentageLiteral(((PercentageLiteral) left).value + ((PercentageLiteral) right).value);
-            }
-        }
-        if (expr instanceof SubtractOperation) {
-            Literal left = evaluateExpression(((SubtractOperation) expr).lhs);
-            Literal right = evaluateExpression(((SubtractOperation) expr).rhs);
-            if (left instanceof ScalarLiteral && right instanceof ScalarLiteral) {
-                return new ScalarLiteral(((ScalarLiteral) left).value - ((ScalarLiteral) right).value);
-            } else if (left instanceof PixelLiteral && right instanceof PixelLiteral) {
-                return new PixelLiteral(((PixelLiteral) left).value - ((PixelLiteral) right).value);
-            } else if (left instanceof PercentageLiteral && right instanceof PercentageLiteral) {
-                return new PercentageLiteral(((PercentageLiteral) left).value - ((PercentageLiteral) right).value);
+                return new PercentageLiteral((int)(((PercentageLiteral) left).value + sign * ((PercentageLiteral) right).value));
             }
         }
         if (expr instanceof MultiplyOperation) {
-            Literal left = evaluateExpression(((MultiplyOperation) expr).lhs);
-            Literal right = evaluateExpression(((MultiplyOperation) expr).rhs);
-
             ScalarLiteral scalar = left instanceof ScalarLiteral ? (ScalarLiteral) left : (ScalarLiteral) right;
             Literal multiplier = scalar == left ? right : left;
+
+            assert scalar != null;
 
             if (multiplier instanceof PixelLiteral) {
                 return new PixelLiteral(((PixelLiteral) multiplier).value * scalar.value);
@@ -143,6 +148,16 @@ public class Evaluator implements Transform {
         variableValues.addFirst(new HashMap<>(variableValues.getFirst()));
         evaluateNodesWithParent(rule.body);
         variableValues.removeFirst();
+    }
+
+    private Literal resolveVariable(String name) {
+        for (int i = 0; i < variableValues.getSize(); i++) {
+            HashMap<String, Literal> scope = variableValues.get(i);
+            if (scope.containsKey(name)) {
+                return scope.get(name);
+            }
+        }
+        return null;
     }
 
 }
